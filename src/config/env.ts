@@ -1,0 +1,168 @@
+/**
+ * Environment Configuration
+ * Type-safe environment variables with validation using Elysia's TypeBox
+ *
+ * Server will fail to start if required variables are missing or invalid
+ */
+
+import { t } from "elysia";
+import { Value } from "@sinclair/typebox/value";
+
+const envSchema = t.Object({
+  // Server
+  PORT: t.Number({ default: 3000, minimum: 1, maximum: 65535 }),
+  HOST: t.String({ default: "localhost" }),
+  NODE_ENV: t.Union(
+    [t.Literal("development"), t.Literal("production"), t.Literal("test")],
+    { default: "development" },
+  ),
+
+  // Database
+  DATABASE_URL: t.Optional(t.String()),
+
+  // JWT Authentication
+  JWT_SECRET: t.String({
+    default: "change-me-in-production-use-secure-random-string",
+  }),
+
+  JWT_EXPIRES_IN: t.String({ default: "7d" }),
+
+  // OAuth 2.0 Configuration
+  GOOGLE_CLIENT_ID: t.Optional(t.String()),
+  GOOGLE_CLIENT_SECRET: t.Optional(t.String()),
+  GITHUB_CLIENT_ID: t.Optional(t.String()),
+  GITHUB_CLIENT_SECRET: t.Optional(t.String()),
+  APPLE_CLIENT_ID: t.Optional(t.String()),
+  APPLE_TEAM_ID: t.Optional(t.String()),
+  APPLE_PRIVATE_KEY: t.Optional(t.String()),
+  OAUTH_REDIRECT_URL: t.String({
+    default: "http://localhost:3000/api/v1/auth/callback",
+  }),
+  OAUTH_SCOPE: t.String({ default: "email profile" }),
+
+  // Redis
+  REDIS_URL: t.Optional(t.String()),
+
+  // Logging
+  LOG_LEVEL: t.Union(
+    [
+      t.Literal("debug"),
+      t.Literal("info"),
+      t.Literal("warn"),
+      t.Literal("error"),
+    ],
+    { default: "info" },
+  ),
+
+  // CORS
+  CORS_ORIGIN: t.String({ default: "*" }),
+  CORS_CREDENTIALS: t.Boolean({ default: false }),
+  CORS_METHODS: t.String({ default: "GET,POST,PUT,DELETE,OPTIONS" }),
+  CORS_ALLOWED_HEADERS: t.String({ default: "Content-Type,Authorization" }),
+
+  // Documentation
+  DOCS_ENABLED: t.Boolean({ default: true }),
+  DOCS_PROVIDER: t.Union([t.Literal("scalar"), t.Literal("swaggerui")], {
+    default: "scalar",
+  }),
+  DOCS_PATH: t.String({ default: "/docs", pattern: "^/" }),
+
+  // API
+  API_PREFIX: t.String({ default: "/api/v1", pattern: "^/" }),
+
+  // Queue Configuration
+  QUEUE_REDIS_URL: t.Optional(t.String()),
+  QUEUE_CONCURRENCY: t.Number({ default: 5, minimum: 1, maximum: 50 }),
+  QUEUE_ENABLED: t.Boolean({ default: true }),
+
+  // Bull Board (Queue Dashboard)
+  BULL_BOARD_ENABLED: t.Boolean({ default: true }),
+  BULL_BOARD_PATH: t.String({ default: "/admin/queues", pattern: "^/" }),
+  BULL_BOARD_USERNAME: t.Optional(t.String()),
+  BULL_BOARD_PASSWORD: t.Optional(t.String()),
+});
+
+function parseEnv(): typeof envSchema.static {
+  // Convert process.env to proper types
+  const rawEnv = {
+    PORT: process.env.PORT ? parseInt(process.env.PORT, 10) : undefined,
+    HOST: process.env.HOST,
+    NODE_ENV: process.env.NODE_ENV,
+    DATABASE_URL: process.env.DATABASE_URL,
+    JWT_SECRET: process.env.JWT_SECRET,
+    JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN,
+    // OAuth 2.0
+    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
+    GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID,
+    GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET,
+    FACEBOOK_CLIENT_ID: process.env.FACEBOOK_CLIENT_ID,
+    FACEBOOK_CLIENT_SECRET: process.env.FACEBOOK_CLIENT_SECRET,
+    APPLE_CLIENT_ID: process.env.APPLE_CLIENT_ID,
+    APPLE_TEAM_ID: process.env.APPLE_TEAM_ID,
+    APPLE_PRIVATE_KEY: process.env.APPLE_PRIVATE_KEY,
+    OAUTH_REDIRECT_URL: process.env.OAUTH_REDIRECT_URL,
+    OAUTH_SCOPE: process.env.OAUTH_SCOPE,
+    REDIS_URL: process.env.REDIS_URL,
+    LOG_LEVEL: process.env.LOG_LEVEL,
+    CORS_ORIGIN: process.env.CORS_ORIGIN,
+    CORS_CREDENTIALS:
+      process.env.CORS_CREDENTIALS === "true"
+        ? true
+        : process.env.CORS_CREDENTIALS === "false"
+          ? false
+          : undefined,
+    CORS_METHODS: process.env.CORS_METHODS,
+    CORS_ALLOWED_HEADERS: process.env.CORS_ALLOWED_HEADERS,
+    DOCS_ENABLED:
+      process.env.DOCS_ENABLED === "true"
+        ? true
+        : process.env.DOCS_ENABLED === "false"
+          ? false
+          : undefined,
+    DOCS_PROVIDER: process.env.DOCS_PROVIDER,
+    DOCS_PATH: process.env.DOCS_PATH,
+    API_PREFIX: process.env.API_PREFIX,
+    // Queue
+    QUEUE_REDIS_URL: process.env.QUEUE_REDIS_URL,
+    QUEUE_CONCURRENCY: process.env.QUEUE_CONCURRENCY
+      ? parseInt(process.env.QUEUE_CONCURRENCY, 10)
+      : undefined,
+    QUEUE_ENABLED:
+      process.env.QUEUE_ENABLED === "true"
+        ? true
+        : process.env.QUEUE_ENABLED === "false"
+          ? false
+          : undefined,
+    // Bull Board
+    BULL_BOARD_ENABLED:
+      process.env.BULL_BOARD_ENABLED === "true"
+        ? true
+        : process.env.BULL_BOARD_ENABLED === "false"
+          ? false
+          : undefined,
+    BULL_BOARD_PATH: process.env.BULL_BOARD_PATH,
+    BULL_BOARD_USERNAME: process.env.BULL_BOARD_USERNAME,
+    BULL_BOARD_PASSWORD: process.env.BULL_BOARD_PASSWORD,
+  };
+
+  // Apply defaults
+  const withDefaults = Value.Default(envSchema, rawEnv);
+
+  // Validate
+  const errors = [...Value.Errors(envSchema, withDefaults)];
+
+  if (errors.length > 0) {
+    console.error("\n Environment validation failed:\n");
+    for (const error of errors) {
+      console.error(`• ${error.path.replace("/", "")}: ${error.message}`);
+    }
+    console.error("\n Check your .env file or environment variables.\n");
+    process.exit(1);
+  }
+
+  return withDefaults as typeof envSchema.static;
+}
+
+export const env = parseEnv();
+export type Env = typeof env;
